@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e  # Exit on any error
+
 # Step 1: Install TA-Lib C library
 apt-get update && apt-get install -y build-essential wget
 wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
@@ -10,9 +12,6 @@ make
 make install
 cd ..
 
-# Step 2: Install Python dependencies
+# Step 2: Install Python dependencies (including ta-lib wrapper)
 pip install --upgrade pip
 pip install -r requirements.txt
-
-# Step 3: Start the bot
-python forex_signal_bot.py
