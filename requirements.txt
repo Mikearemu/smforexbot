@@ -1,0 +1,8 @@
+pandas==2.0.3
+numpy==1.24.3
+yfinance==0.2.18
+python-telegram-bot==20.3
+TA-Lib==0.4.25
+schedule==1.2.0
+requests==2.31.0
+asyncio-mqtt==0.16.1
