@@ -4,7 +4,7 @@ import sqlite3
 from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
-import talib
+import pandas_ta as ta
 import yfinance as yf
 from telegram import Bot, Update, ReplyKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -58,22 +58,23 @@ class TechnicalAnalyzer:
         if data.empty or len(data) < 50:
             return {}
 
-        close = data['Close'].values
-        high = data['High'].values
-        low = data['Low'].values
+        close = data['Close']
+        high = data['High']
+        low = data['Low']
 
-        return {
-            'sma_20': talib.SMA(close, 20),
-            'sma_50': talib.SMA(close, 50),
-            'ema_12': talib.EMA(close, 12),
-            'ema_26': talib.EMA(close, 26),
-            'macd': talib.MACD(close),
-            'rsi': talib.RSI(close, 14),
-            'bb_upper': talib.BBANDS(close)[0],
-            'bb_lower': talib.BBANDS(close)[2],
-            'stoch_k': talib.STOCH(high, low, close)[0],
-            'adx': talib.ADX(high, low, close, 14)
+        indicators = {
+            'sma_20': ta.sma(close, length=20),
+            'sma_50': ta.sma(close, length=50),
+            'ema_12': ta.ema(close, length=12),
+            'ema_26': ta.ema(close, length=26),
+            'macd': ta.macd(close),
+            'rsi': ta.rsi(close, length=14),
+            'bb': ta.bbands(close),
+            'stoch': ta.stoch(high, low, close),
+            'adx': ta.adx(high, low, close, length=14)
         }
+
+        return indicators
 
     def generate_signal(self, pair: str) -> Signal:
         data = self.data_provider.get_historical_data(pair)
@@ -87,7 +88,6 @@ class TechnicalAnalyzer:
         current_price = data['Close'].iloc[-1]
         signals, confidence = [], 0.0
 
-        # Updated confidence weighting
         confidence_weights = {
             'ma_crossover': 0.3,
             'rsi': 0.25,
@@ -96,30 +96,38 @@ class TechnicalAnalyzer:
             'stochastic': 0.1
         }
 
-        if indicators['sma_20'][-1] > indicators['sma_50'][-1]:
+        sma_20 = indicators['sma_20'].iloc[-1]
+        sma_50 = indicators['sma_50'].iloc[-1]
+
+        if sma_20 > sma_50:
             signals.append('BUY'); confidence += confidence_weights['ma_crossover']
-        elif indicators['sma_20'][-1] < indicators['sma_50'][-1]:
+        elif sma_20 < sma_50:
             signals.append('SELL'); confidence += confidence_weights['ma_crossover']
 
-        if indicators['rsi'][-1] < 30:
+        rsi = indicators['rsi'].iloc[-1]
+        if rsi < 30:
             signals.append('BUY'); confidence += confidence_weights['rsi']
-        elif indicators['rsi'][-1] > 70:
+        elif rsi > 70:
             signals.append('SELL'); confidence += confidence_weights['rsi']
 
-        macd, macd_signal, _ = indicators['macd']
-        if macd[-1] > macd_signal[-1]:
+        macd_line = indicators['macd']['MACD_12_26_9'].iloc[-1]
+        macd_signal = indicators['macd']['MACDs_12_26_9'].iloc[-1]
+        if macd_line > macd_signal:
             signals.append('BUY'); confidence += confidence_weights['macd']
-        elif macd[-1] < macd_signal[-1]:
+        elif macd_line < macd_signal:
             signals.append('SELL'); confidence += confidence_weights['macd']
 
-        if current_price <= indicators['bb_lower'][-1]:
+        bb_lower = indicators['bb']['BBL_20_2.0'].iloc[-1]
+        bb_upper = indicators['bb']['BBU_20_2.0'].iloc[-1]
+        if current_price <= bb_lower:
             signals.append('BUY'); confidence += confidence_weights['bollinger']
-        elif current_price >= indicators['bb_upper'][-1]:
+        elif current_price >= bb_upper:
             signals.append('SELL'); confidence += confidence_weights['bollinger']
 
-        if indicators['stoch_k'][-1] < 20:
+        stoch_k = indicators['stoch']['STOCHk_14_3_3'].iloc[-1]
+        if stoch_k < 20:
             signals.append('BUY'); confidence += confidence_weights['stochastic']
-        elif indicators['stoch_k'][-1] > 80:
+        elif stoch_k > 80:
             signals.append('SELL'); confidence += confidence_weights['stochastic']
 
         action = max(set(signals), key=signals.count) if signals else 'HOLD'
@@ -141,9 +149,8 @@ class TechnicalAnalyzer:
         )
 
     def calculate_atr(self, data: pd.DataFrame, period: int = 14) -> float:
-        high, low, close = data['High'].values, data['Low'].values, data['Close'].values
-        atr = talib.ATR(high, low, close, period)
-        return atr[-1] if len(atr) > 0 else 0.02 * np.std(close)
+        atr = ta.atr(data['High'], data['Low'], data['Close'], length=period)
+        return atr.iloc[-1] if not atr.empty else 0.02 * np.std(data['Close'])
 
 class DatabaseManager:
     def __init__(self, db_path="forex_signals.db"):

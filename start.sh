@@ -1,12 +1,13 @@
 #!/bin/bash
-apt-get update && apt-get install -y build-essential wget
-wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
-tar -xvzf ta-lib-0.4.0-src.tar.gz
-cd ta-lib
-./configure --prefix=/usr
-make
-make install
-cd ..
+
+# Update and install any required packages
+apt-get update && apt-get install -y python3-pip
+
+# Upgrade pip
 pip install --upgrade pip
+
+# Install Python dependencies
 pip install -r requirements.txt
+
+# Run your bot
 python3 forex_signal_bot.py
